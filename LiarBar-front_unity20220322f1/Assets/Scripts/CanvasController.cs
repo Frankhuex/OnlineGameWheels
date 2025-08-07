@@ -30,12 +30,16 @@ public class CanvasController : MonoBehaviour
     [SerializeField] private Button buttonLeaveRoom;
     [SerializeField] private Button buttonReady;
     [SerializeField] private Button buttonHostStart;
+    [SerializeField] private Button buttonChangeName;
 
 
     [SerializeField] private TMP_InputField urlInput;
     [SerializeField] private TMP_InputField roomIdInput;
+    [SerializeField] private TMP_InputField changeNameInput;
+
     [SerializeField] private TMP_Text textConnected;
     [SerializeField] private TMP_Text textRoomId;
+
     [SerializeField] private GameObject lobbyScrollViewContent;
     [SerializeField] private GameObject lobbyListItemBase;
 
@@ -188,7 +192,16 @@ public class CanvasController : MonoBehaviour
             texts[3].text = player.ready ? "Ready" : "Not Ready";
         }
         buttonReady.GetComponentInChildren<TMP_Text>().text = RoomManager.Instance.player.ready ? "Ready: Yes" : "Ready: No";
-        buttonHostStart.gameObject.SetActive(RoomManager.Instance.player.host);
+        buttonHostStart.gameObject.SetActive(
+            RoomManager.Instance.player.host
+            && room.playerList.TrueForAll(p => p.ready)
+            && !room.started
+        );
+        changeNameInput.text = RoomManager.Instance.player.name;
+        if (room.started)
+        {
+            Debug.Log($"Game ({room.id}) has started");
+        }
     }
 
     public async Task HandleReadyButton()
@@ -199,8 +212,43 @@ public class CanvasController : MonoBehaviour
             return;
         }
         bool ready = !RoomManager.Instance.player.ready;
-
         await RoomManager.Instance.Ready(ready);
+    }
+
+    public async Task HandleChangeNameButton()
+    {
+        if (RoomManager.Instance.room == null || RoomManager.Instance.player == null)
+        {
+            Debug.LogError("Cannot ready, not in a room or player not found.");
+            return;
+        }
+        string name = changeNameInput.text;
+        await RoomManager.Instance.ChangeName(name);
+    }
+
+    public async Task HandleHostStartButton()
+    {
+        if (RoomManager.Instance.room == null || RoomManager.Instance.player == null)
+        {
+            Debug.LogError("Cannot start game, not in a room or player not found.");
+            return;
+        }
+        if (!RoomManager.Instance.player.host)
+        {
+            Debug.LogError("Only the host can start the game.");
+            return;
+        }
+        if (RoomManager.Instance.room.started)
+        {
+            Debug.LogError("Game already started.");
+            return;
+        }
+        if (!RoomManager.Instance.room.playerList.TrueForAll(p => p.ready))
+        {
+            Debug.LogError("Not all players are ready.");
+            return;
+        }
+        await RoomManager.Instance.StartGame();
     }
 
 
@@ -245,6 +293,14 @@ public class CanvasController : MonoBehaviour
         buttonReady.onClick.AddListener(async () =>
         {
             await HandleReadyButton();
+        });
+        buttonChangeName.onClick.AddListener(async () =>
+        {
+            await HandleChangeNameButton();
+        });
+        buttonHostStart.onClick.AddListener(async () =>
+        {
+            await HandleHostStartButton();
         });
         
     }

@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+
 import lombok.*;
 
 @Getter @Setter @AllArgsConstructor
@@ -12,6 +15,8 @@ public class Room {
     private List<Player> playerList;
     private int maxPlayers;
     private boolean isStarted;
+
+    
 
     public Room(String id) {
         this.id=id;
@@ -41,6 +46,7 @@ public class Room {
             playerList.remove(player);
             return true;
         }
+        
         return false;
     }
 

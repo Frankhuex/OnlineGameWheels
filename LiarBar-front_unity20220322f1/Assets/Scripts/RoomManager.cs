@@ -41,7 +41,7 @@ public class RoomManager
                 player = room.playerList.Find(x => x.userId == WebSocketClient.Instance.userId);
                 Debug.Log("Room ID: " + room.id);
                 Debug.Log("Room refreshed: " + room.ToString());
-                Debug.Log("Player joined: " + player.ToString());
+                Debug.Log("Player refreshed: " + player.ToString());
                 OnRoomRefreshed?.Invoke(room);
             }
             else
@@ -88,6 +88,43 @@ public class RoomManager
             return;
         }
         Message<bool> msg = new Message<bool>(Message<bool>.MsgType.PREPARE, ready);
+        await WebSocketClient.Instance.SendMessageAsync(msg);
+    }
+
+    public async Task ChangeName(string name)
+    {
+        if (room == null || player == null)
+        {
+            Debug.LogError("Cannot change name, not in a room or player not found.");
+            return;
+        }
+        Message<string> msg = new Message<string>(Message<string>.MsgType.CHANGE_NAME, name);
+        await WebSocketClient.Instance.SendMessageAsync(msg);
+    }
+
+    public async Task StartGame()
+    {
+        if (room == null || player == null)
+        {
+            Debug.LogError("Cannot start game, not in a room or player not found.");
+            return;
+        }
+        if (!player.host)
+        {
+            Debug.LogError("Only the host can start the game.");
+            return;
+        }
+        if (room.started)
+        {
+            Debug.LogError("Game already started.");
+            return;
+        }
+        if (!room.playerList.TrueForAll(p => p.ready))
+        {
+            Debug.LogError("Not all players are ready.");
+            return;
+        }
+        Message<string> msg = new Message<string>(Message<string>.MsgType.START_GAME, room.id);
         await WebSocketClient.Instance.SendMessageAsync(msg);
     }
 

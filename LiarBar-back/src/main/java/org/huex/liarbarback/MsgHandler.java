@@ -8,6 +8,7 @@ import org.huex.liarbarback.models.Message;
 import org.huex.liarbarback.models.Player;
 import org.huex.liarbarback.models.Room;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,7 @@ public class MsgHandler {
     @Autowired RoomManager roomManager;
     @Autowired PlayerManager playerManager;
     @Autowired SessionManager sessionManager;
+    @Autowired private ApplicationEventPublisher eventPublisher;
     
     public boolean handleMsg(Message<?> message, Session session, String userId) {
         switch (message.getMsgType()) {
@@ -39,6 +41,9 @@ public class MsgHandler {
             case PREPARE -> {
                 return handlePrepare(session, userId, (boolean)message.getData());
             }
+            case START_GAME -> {
+                return handleStartGame(session, userId);
+            }
         }
         return false;
     }
@@ -47,6 +52,11 @@ public class MsgHandler {
     public void roomUpdatedListener(RoomUpdatedEvent event) {
         Room room = roomManager.getRoom(event.getRoomId()).orElse(null);
         if (room==null) return;
+        if (room.getPlayerList().isEmpty()) {
+            roomManager.removeRoom(room.getId());
+            System.out.println("Room " + room.getId() + " removed due to no players.");
+            return;
+        }
         broadcastRoom(room);
     }
 
@@ -150,6 +160,9 @@ public class MsgHandler {
             playerManager.removePlayer(userId);
         }
         session.getAsyncRemote().sendObject(new Message<>(Message.MsgType.ROOM_LEFT, "Left room"));
+        if (room.getPlayerList().isEmpty()) {
+            eventPublisher.publishEvent(new RoomUpdatedEvent(this, player.getRoomId()));
+        }
         broadcastRoom(room);
         return true;
     }
@@ -199,5 +212,33 @@ public class MsgHandler {
         }
         broadcastRoom(room);
         return true;
+    }
+
+    public boolean handleStartGame(Session session, String userId) {
+        Player player=playerManager.getPlayer(userId).orElse(null);
+        if (player==null) {
+            System.err.println("Player " + userId + " not found");
+            session.getAsyncRemote().sendObject(new Message<>(Message.MsgType.PLAYER_NOT_FOUND, "Player not found"));
+            return false;
+        }
+        Room room=roomManager.getRoom(player.getRoomId()).orElse(null);
+        if (!checkPlayerInRoom(player, room)) {
+            System.err.println("Player " + userId + " not in a room");
+            session.getAsyncRemote().sendObject(new Message<>(Message.MsgType.PLAYER_NOT_FOUND, "Player not found in room"));
+            return false;
+        }
+        if (!player.isHost()) {
+            System.err.println("Player " + userId + " is not the host");
+            session.getAsyncRemote().sendObject(new Message<>(Message.MsgType.ERROR, "You are not the host"));
+            return false;
+        }
+        if (!room.isStarted() && room.getPlayerList().stream().allMatch(Player::isReady)) {
+            room.setStarted(true);
+            broadcastRoom(room);
+            return true;
+        } else {
+            session.getAsyncRemote().sendObject(new Message<>(Message.MsgType.ERROR, "Game cannot be started"));
+            return false;
+        }
     }
 }
